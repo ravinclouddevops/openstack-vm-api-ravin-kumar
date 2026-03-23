@@ -1,0 +1,12 @@
+[run]
+source = app
+omit =
+    */tests/*
+    app/main.py
+
+[report]
+show_missing = true
+fail_under = 80
+
+[html]
+directory = htmlcov

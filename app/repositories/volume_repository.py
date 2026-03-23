@@ -4,7 +4,7 @@ Volume Repository — wraps Cinder (block storage) via openstacksdk.
 from __future__ import annotations
 
 import logging
-from typing import Any
+from typing import Any, Dict, List, Optional
 
 import openstack.connection
 from openstack.exceptions import SDKException
@@ -20,9 +20,7 @@ class VolumeRepository:
     def __init__(self, conn: openstack.connection.Connection) -> None:
         self._conn = conn
 
-    # ── CRUD ───────────────────────────────────────────────────────────────────
-
-    def list_volumes(self, filters: dict | None = None) -> list[Any]:
+    def list_volumes(self, filters: Optional[Dict] = None) -> List[Any]:
         try:
             return list(self._conn.block_storage.volumes(**(filters or {})))
         except SDKException as exc:
@@ -52,12 +50,10 @@ class VolumeRepository:
         except SDKException as exc:
             raise map_openstack_error(exc, "volume") from exc
 
-    # ── Attach / detach ────────────────────────────────────────────────────────
-
-    def attach_volume(self, server_id: str, volume_id: str, device: str | None = None) -> Any:
+    def attach_volume(self, server_id: str, volume_id: str, device: Optional[str] = None) -> Any:
         try:
             logger.info("Attaching volume %s to server %s", volume_id, server_id)
-            kwargs: dict[str, Any] = {"volumeId": volume_id}
+            kwargs: Dict[str, Any] = {"volumeId": volume_id}
             if device:
                 kwargs["device"] = device
             return self._conn.compute.create_volume_attachment(server_id, **kwargs)
@@ -71,9 +67,7 @@ class VolumeRepository:
         except SDKException as exc:
             raise map_openstack_error(exc, "volume attachment") from exc
 
-    # ── Snapshots ──────────────────────────────────────────────────────────────
-
-    def create_snapshot(self, volume_id: str, name: str, description: str | None, force: bool = False) -> Any:
+    def create_snapshot(self, volume_id: str, name: str, description: Optional[str], force: bool = False) -> Any:
         try:
             logger.info("Creating snapshot of volume %s", volume_id)
             return self._conn.block_storage.create_snapshot(
@@ -85,9 +79,9 @@ class VolumeRepository:
         except SDKException as exc:
             raise map_openstack_error(exc, "snapshot") from exc
 
-    def list_snapshots(self, volume_id: str | None = None) -> list[Any]:
+    def list_snapshots(self, volume_id: Optional[str] = None) -> List[Any]:
         try:
-            filters: dict[str, Any] = {}
+            filters: Dict[str, Any] = {}
             if volume_id:
                 filters["volume_id"] = volume_id
             return list(self._conn.block_storage.snapshots(**filters))
@@ -109,8 +103,6 @@ class VolumeRepository:
             self._conn.block_storage.delete_snapshot(snapshot_id, ignore_missing=True)
         except SDKException as exc:
             raise map_openstack_error(exc, "snapshot") from exc
-
-    # ── Wait helper ────────────────────────────────────────────────────────────
 
     def wait_for_volume(self, volume_id: str, status: str = "available", timeout: int = 120) -> Any:
         try:

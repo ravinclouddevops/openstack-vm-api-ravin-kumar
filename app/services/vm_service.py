@@ -1,13 +1,10 @@
 """
 VM Service — orchestrates VM lifecycle business logic.
-
-Converts raw OpenStack objects to typed Pydantic response models.
-This is the layer unit tests mock; integration tests use the real repository.
 """
 from __future__ import annotations
 
 import logging
-from typing import Any
+from typing import Any, Dict, List, Optional
 
 from app.models.vm import (
     AddressInfo,
@@ -24,15 +21,15 @@ from app.repositories.vm_repository import VMRepository
 logger = logging.getLogger(__name__)
 
 
-def _map_status(raw: str | None) -> VMStatus:
+def _map_status(raw: Optional[str]) -> VMStatus:
     try:
         return VMStatus(raw or "UNKNOWN")
     except ValueError:
         return VMStatus.UNKNOWN
 
 
-def _map_addresses(raw: dict) -> dict[str, list[AddressInfo]]:
-    result: dict[str, list[AddressInfo]] = {}
+def _map_addresses(raw: dict) -> Dict[str, List[AddressInfo]]:
+    result: Dict[str, List[AddressInfo]] = {}
     for net, addrs in (raw or {}).items():
         result[net] = [
             AddressInfo(
@@ -68,8 +65,8 @@ class VMService:
     def __init__(self, repo: VMRepository) -> None:
         self._repo = repo
 
-    def list_vms(self, status_filter: str | None = None) -> list[VMSummary]:
-        filters: dict[str, Any] = {}
+    def list_vms(self, status_filter: Optional[str] = None) -> List[VMSummary]:
+        filters: Dict[str, Any] = {}
         if status_filter:
             filters["status"] = status_filter.upper()
         servers = self._repo.list_servers(filters=filters)
@@ -91,7 +88,7 @@ class VMService:
         networks = [{"uuid": n.network_id} for n in request.networks]
         security_groups = [{"name": sg} for sg in request.security_groups]
 
-        kwargs: dict[str, Any] = {
+        kwargs: Dict[str, Any] = {
             "name": request.name,
             "flavorRef": request.flavor_id,
             "imageRef": request.image_id,
@@ -113,12 +110,11 @@ class VMService:
         return _to_vm_response(server)
 
     def delete_vm(self, vm_id: str) -> None:
-        # Verify exists before deleting (raises NotFoundError if not)
         self._repo.get_server(vm_id)
         self._repo.delete_server(vm_id)
 
     def start_vm(self, vm_id: str) -> VMResponse:
-        self._repo.get_server(vm_id)  # validate existence
+        self._repo.get_server(vm_id)
         self._repo.start_server(vm_id)
         return self.get_vm(vm_id)
 

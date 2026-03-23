@@ -3,6 +3,8 @@ VM lifecycle REST endpoints — /api/v1/vms
 """
 from __future__ import annotations
 
+from typing import List, Optional
+
 from fastapi import APIRouter, Depends, Query, status
 
 from app.dependencies import get_vm_service
@@ -22,14 +24,13 @@ router = APIRouter(prefix="/vms", tags=["Virtual Machines"])
 
 @router.get(
     "",
-    response_model=list[VMSummary],
+    response_model=List[VMSummary],
     summary="List virtual machines",
-    description="Returns all VMs visible to the authenticated project. Optionally filter by status.",
 )
 async def list_vms(
-    status: str | None = Query(None, description="Filter by status e.g. ACTIVE, SHUTOFF"),
+    status: Optional[str] = Query(None, description="Filter by status e.g. ACTIVE, SHUTOFF"),
     service: VMService = Depends(get_vm_service),
-) -> list[VMSummary]:
+) -> List[VMSummary]:
     return service.list_vms(status_filter=status)
 
 
@@ -38,10 +39,6 @@ async def list_vms(
     response_model=VMResponse,
     status_code=status.HTTP_202_ACCEPTED,
     summary="Create (boot) a virtual machine",
-    description=(
-        "Boots a new VM from the specified image and flavor. "
-        "The VM transitions through BUILD → ACTIVE asynchronously."
-    ),
 )
 async def create_vm(
     request: VMCreateRequest,
@@ -107,7 +104,6 @@ async def stop_vm(
     response_model=VMResponse,
     status_code=status.HTTP_202_ACCEPTED,
     summary="Reboot a virtual machine",
-    description="SOFT reboot requests graceful OS shutdown; HARD reboot power-cycles the VM.",
 )
 async def reboot_vm(
     vm_id: str,

@@ -1,13 +1,10 @@
 """
 OpenStack connection factory.
-
-Builds an openstack.connection.Connection from environment variables or a
-named cloud in clouds.yaml.  The connection object is thread-safe and is
-intended to be used as a long-lived singleton (via FastAPI dependency injection).
 """
 from __future__ import annotations
 
 import logging
+from typing import Optional
 
 import openstack
 import openstack.connection
@@ -30,13 +27,6 @@ logger = logging.getLogger(__name__)
 
 
 def build_connection(settings: Settings) -> openstack.connection.Connection:
-    """
-    Create and return an authenticated OpenStack connection.
-
-    Priority order:
-    1. Named cloud in clouds.yaml (OS_CLOUD / os_cloud setting)
-    2. Explicit credential env-vars (OS_AUTH_URL, OS_USERNAME, …)
-    """
     if settings.os_cloud:
         logger.info("Connecting to OpenStack cloud: %s", settings.os_cloud)
         return openstack.connect(cloud=settings.os_cloud)
@@ -54,10 +44,6 @@ def build_connection(settings: Settings) -> openstack.connection.Connection:
 
 
 def map_openstack_error(exc: Exception, resource_type: str = "resource") -> Exception:
-    """
-    Translate openstacksdk HTTP exceptions into domain exceptions so the
-    service layer stays SDK-agnostic.
-    """
     if isinstance(exc, NotFoundException):
         return NotFoundError(f"{resource_type} not found", detail=str(exc))
     if isinstance(exc, ConflictException):

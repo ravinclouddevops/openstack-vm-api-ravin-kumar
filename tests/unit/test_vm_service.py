@@ -154,3 +154,78 @@ class TestConsole:
         result = vm_service.get_console_url("vm-001")
         assert result.url == "https://console.example.com/vnc"
         assert result.console_type == "novnc"
+
+
+class TestStatusMapping:
+    def test_unknown_status_falls_back(self, vm_service: VMService, mock_vm_repo):
+        server = make_fake_server(status="SOME_FUTURE_STATUS")
+        mock_vm_repo.get_server.return_value = server
+        result = vm_service.get_vm("vm-001")
+        assert result.status.value == "UNKNOWN"
+
+    def test_none_status_falls_back(self, vm_service: VMService, mock_vm_repo):
+        server = make_fake_server(status=None)
+        mock_vm_repo.get_server.return_value = server
+        result = vm_service.get_vm("vm-001")
+        assert result.status.value == "UNKNOWN"
+
+
+class TestVMResponseMapping:
+    def test_maps_none_flavor_and_image(self, vm_service: VMService, mock_vm_repo):
+        server = make_fake_server()
+        server.flavor = None
+        server.image = None
+        server.security_groups = None
+        mock_vm_repo.get_server.return_value = server
+        result = vm_service.get_vm("vm-001")
+        assert result.flavor_id is None
+        assert result.image_id is None
+        assert result.security_groups == []
+
+    def test_maps_multiple_networks(self, vm_service: VMService, mock_vm_repo):
+        server = make_fake_server()
+        server.addresses = {
+            "public": [{"addr": "1.2.3.4", "version": 4, "OS-EXT-IPS-MAC:mac_addr": "aa:bb:cc"}],
+            "private": [{"addr": "10.0.0.1", "version": 4}],
+        }
+        mock_vm_repo.get_server.return_value = server
+        result = vm_service.get_vm("vm-001")
+        assert "public" in result.addresses
+        assert result.addresses["public"][0].ip_address == "1.2.3.4"
+        assert result.addresses["public"][0].mac_address == "aa:bb:cc"
+
+    def test_list_with_status_filter_none(self, vm_service: VMService, mock_vm_repo):
+        mock_vm_repo.list_servers.return_value = []
+        vm_service.list_vms(status_filter=None)
+        mock_vm_repo.list_servers.assert_called_once_with(filters={})
+
+
+class TestExceptions:
+    def test_platform_error_with_detail(self):
+        from app.exceptions import PlatformError
+        err = PlatformError("something failed", detail="extra info")
+        assert err.message == "something failed"
+        assert err.detail == "extra info"
+        assert err.status_code == 500
+
+    def test_platform_error_without_detail(self):
+        from app.exceptions import NotFoundError
+        err = NotFoundError("not found")
+        assert err.detail is None
+        assert err.status_code == 404
+
+    def test_conflict_error(self):
+        from app.exceptions import ConflictError
+        err = ConflictError("conflict")
+        assert err.status_code == 409
+        assert err.error_code == "CONFLICT"
+
+    def test_quota_exceeded_error(self):
+        from app.exceptions import QuotaExceededError
+        err = QuotaExceededError("quota")
+        assert err.status_code == 429
+
+    def test_openstack_error(self):
+        from app.exceptions import OpenStackError
+        err = OpenStackError("sdk error")
+        assert err.status_code == 502

@@ -121,3 +121,63 @@ class TestSnapshots:
         mock_volume_repo.get_snapshot.return_value = make_fake_snapshot()
         volume_service.delete_snapshot("snap-001")
         mock_volume_repo.delete_snapshot.assert_called_once_with("snap-001")
+
+
+class TestVolumeStatusMapping:
+    def test_unknown_status_falls_back(self, volume_service: VolumeService, mock_volume_repo):
+        vol = make_fake_volume(status="some_unknown_status")
+        mock_volume_repo.get_volume.return_value = vol
+        result = volume_service.get_volume("vol-001")
+        assert result.status.value == "unknown"
+
+    def test_none_status_falls_back(self, volume_service: VolumeService, mock_volume_repo):
+        vol = make_fake_volume(status=None)
+        mock_volume_repo.get_volume.return_value = vol
+        result = volume_service.get_volume("vol-001")
+        assert result.status.value == "unknown"
+
+
+class TestSnapshotStatusMapping:
+    def test_unknown_snap_status(self, volume_service: VolumeService, mock_volume_repo):
+        from tests.conftest import make_fake_snapshot
+        mock_volume_repo.get_volume.return_value = make_fake_volume()
+        snap = make_fake_snapshot(status="weird_status")
+        mock_volume_repo.create_snapshot.return_value = snap
+        result = volume_service.create_snapshot(
+            "vol-001", SnapshotCreateRequest(name="s")
+        )
+        assert result.status.value == "error"
+
+
+class TestVolumeResponseMapping:
+    def test_maps_attachments(self, volume_service: VolumeService, mock_volume_repo):
+        vol = make_fake_volume()
+        vol.attachments = [
+            {"attachment_id": "att-1", "server_id": "vm-1", "device": "/dev/vdb"}
+        ]
+        mock_volume_repo.get_volume.return_value = vol
+        result = volume_service.get_volume("vol-001")
+        assert len(result.attachments) == 1
+        assert result.attachments[0].device == "/dev/vdb"
+
+    def test_create_volume_with_all_optional_fields(self, volume_service: VolumeService, mock_volume_repo):
+        mock_volume_repo.create_volume.return_value = make_fake_volume()
+        request = VolumeCreateRequest(
+            name="full-vol",
+            size_gb=100,
+            volume_type="ssd",
+            availability_zone="nova",
+            description="test desc",
+            metadata={"key": "val"},
+        )
+        volume_service.create_volume(request)
+        call_kwargs = mock_volume_repo.create_volume.call_args.kwargs
+        assert call_kwargs["volume_type"] == "ssd"
+        assert call_kwargs["availability_zone"] == "nova"
+        assert call_kwargs["description"] == "test desc"
+        assert call_kwargs["metadata"] == {"key": "val"}
+
+    def test_list_snapshots_no_filter(self, volume_service: VolumeService, mock_volume_repo):
+        mock_volume_repo.list_snapshots.return_value = []
+        volume_service.list_snapshots(volume_id=None)
+        mock_volume_repo.list_snapshots.assert_called_once_with(None)

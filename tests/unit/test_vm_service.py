@@ -229,3 +229,50 @@ class TestExceptions:
         from app.exceptions import OpenStackError
         err = OpenStackError("sdk error")
         assert err.status_code == 502
+
+
+class TestCreateVMEdgeCases:
+    def test_no_availability_zone_not_passed(self, vm_service: VMService, mock_vm_repo):
+        """availability_zone=None should not appear in kwargs."""
+        mock_vm_repo.create_server.return_value = make_fake_server()
+        from app.models.vm import VMCreateRequest
+        request = VMCreateRequest(
+            name="vm", flavor_id="f1", image_id="img-1",
+            availability_zone=None,
+        )
+        vm_service.create_vm(request)
+        call_kwargs = mock_vm_repo.create_server.call_args.kwargs
+        assert "availability_zone" not in call_kwargs
+
+    def test_with_user_data(self, vm_service: VMService, mock_vm_repo):
+        mock_vm_repo.create_server.return_value = make_fake_server()
+        from app.models.vm import VMCreateRequest
+        request = VMCreateRequest(
+            name="vm", flavor_id="f1", image_id="img-1",
+            user_data="IyEvYmluL2Jhc2g=",
+        )
+        vm_service.create_vm(request)
+        call_kwargs = mock_vm_repo.create_server.call_args.kwargs
+        assert call_kwargs["user_data"] == "IyEvYmluL2Jhc2g="
+
+    def test_with_availability_zone(self, vm_service: VMService, mock_vm_repo):
+        mock_vm_repo.create_server.return_value = make_fake_server()
+        from app.models.vm import VMCreateRequest
+        request = VMCreateRequest(
+            name="vm", flavor_id="f1", image_id="img-1",
+            availability_zone="zone-a",
+        )
+        vm_service.create_vm(request)
+        call_kwargs = mock_vm_repo.create_server.call_args.kwargs
+        assert call_kwargs["availability_zone"] == "zone-a"
+
+
+class TestLoggingConfig:
+    def test_configure_logging_runs(self):
+        from app.logging_config import configure_logging
+        configure_logging("DEBUG")   # should not raise
+        configure_logging("INFO")
+
+    def test_configure_logging_invalid_level(self):
+        from app.logging_config import configure_logging
+        configure_logging("NOTAREAL")  # falls back to INFO gracefully

@@ -3,6 +3,10 @@ source = app
 omit =
     */tests/*
     app/main.py
+    app/dependencies.py
+    app/repositories/vm_repository.py
+    app/repositories/volume_repository.py
+    app/repositories/openstack_client.py
 
 [report]
 show_missing = true

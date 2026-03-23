@@ -181,3 +181,43 @@ class TestVolumeResponseMapping:
         mock_volume_repo.list_snapshots.return_value = []
         volume_service.list_snapshots(volume_id=None)
         mock_volume_repo.list_snapshots.assert_called_once_with(None)
+
+
+class TestVolumeEdgeCases:
+    def test_volume_bootable_true_string(self, volume_service: VolumeService, mock_volume_repo):
+        vol = make_fake_volume()
+        vol.is_bootable = "true"
+        mock_volume_repo.get_volume.return_value = vol
+        result = volume_service.get_volume("vol-001")
+        assert result.bootable is True
+
+    def test_volume_bootable_false(self, volume_service: VolumeService, mock_volume_repo):
+        vol = make_fake_volume()
+        vol.is_bootable = False
+        mock_volume_repo.get_volume.return_value = vol
+        result = volume_service.get_volume("vol-001")
+        assert result.bootable is False
+
+    def test_snapshot_with_none_created_at(self, volume_service: VolumeService, mock_volume_repo):
+        from tests.conftest import make_fake_snapshot
+        mock_volume_repo.get_volume.return_value = make_fake_volume()
+        snap = make_fake_snapshot()
+        snap.created_at = None
+        mock_volume_repo.create_snapshot.return_value = snap
+        result = volume_service.create_snapshot(
+            "vol-001", SnapshotCreateRequest(name="s")
+        )
+        assert result.created_at is None
+
+    def test_attach_volume_no_mount_point(self, volume_service: VolumeService, mock_volume_repo):
+        mock_volume_repo.get_volume.return_value = make_fake_volume()
+        from app.models.volume import VolumeAttachRequest
+        request = VolumeAttachRequest(vm_id="vm-001")  # no mount_point
+        volume_service.attach_volume("vol-001", request)
+        mock_volume_repo.attach_volume.assert_called_once_with(
+            server_id="vm-001", volume_id="vol-001", device=None
+        )
+
+    def test_list_volumes_empty(self, volume_service: VolumeService, mock_volume_repo):
+        mock_volume_repo.list_volumes.return_value = []
+        assert volume_service.list_volumes() == []
